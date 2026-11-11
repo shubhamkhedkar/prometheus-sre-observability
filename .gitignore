@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+.env
+.env.*
+!.env.example
+# Local Prometheus / Grafana / Alertmanager data if you run the compose stack.
+data/
+prometheus-data/
+grafana-data/
+# Downloaded tool binaries (promtool etc.).
+bin/

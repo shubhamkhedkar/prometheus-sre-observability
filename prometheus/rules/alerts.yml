@@ -1,0 +1,76 @@
+# Symptom and saturation alerts for checkout-api. SLO burn-rate alerts live in
+# slo-checkout-api.yml (generated). Every alert links to docs/runbooks.md.
+groups:
+  - name: checkout-api.alerts
+    rules:
+      - alert: CheckoutAPITargetDown
+        expr: up{job="checkout-api"} == 0
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: checkout-api target {{ $labels.instance }} is down
+          description: Prometheus has failed to scrape {{ $labels.instance }} for more than 2 minutes.
+          runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#checkoutapitargetdown
+
+      - alert: CheckoutAPIMetricsAbsent
+        expr: absent(up{job="checkout-api"})
+        for: 5m
+        labels:
+          severity: ticket
+        annotations:
+          summary: No checkout-api scrape target is known to Prometheus
+          description: The checkout-api job has no targets; check service discovery and the scrape config.
+          runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#checkoutapimetricsabsent
+
+      - alert: CheckoutAPIHighErrorRate
+        expr: job:http_requests_errors:ratio_rate5m{job="checkout-api"} > 0.05 and job:http_requests:rate5m{job="checkout-api"} > 0.1
+        for: 5m
+        labels:
+          severity: ticket
+        annotations:
+          summary: checkout-api 5xx ratio above 5% for 5 minutes
+          description: More than 5% of checkout-api requests return 5xx. Check recent deploys and dependencies.
+          runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#checkoutapihigherrorrate
+
+      - alert: CheckoutAPIHighLatencyP99
+        expr: job_route:http_request_duration_seconds:p99_5m{job="checkout-api",route=~"/api/.*"} > 0.5
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: checkout-api p99 latency above 500ms on {{ $labels.route }}
+          description: p99 latency on {{ $labels.route }} has exceeded 500ms for 10 minutes.
+          runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#checkoutapihighlatencyp99
+
+      - alert: CheckoutAPISaturation
+        expr: job:http_requests_in_flight:sum{job="checkout-api"} > 50
+        for: 5m
+        labels:
+          severity: ticket
+        annotations:
+          summary: checkout-api has more than 50 requests in flight
+          description: Sustained concurrency above 50 usually means a slow dependency or thread exhaustion.
+          runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#checkoutapisaturation
+
+      - alert: CheckoutInventoryLow
+        expr: checkout_inventory_stock_items{job="checkout-api"} < 5
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: SKU {{ $labels.sku }} has fewer than 5 units in stock
+          description: Business alert routed to the merchandising channel, not to on-call.
+          runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#checkoutinventorylow
+
+  - name: prometheus.self-monitoring
+    rules:
+      - alert: PrometheusRuleEvaluationFailures
+        expr: increase(prometheus_rule_evaluation_failures_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: ticket
+        annotations:
+          summary: Prometheus failed to evaluate rules in group {{ $labels.rule_group }}
+          description: Recording or alerting rules are failing, so SLO alerts may be blind.
+          runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#prometheusruleevaluationfailures

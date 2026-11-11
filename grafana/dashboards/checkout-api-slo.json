@@ -1,0 +1,582 @@
+{
+  "uid": "checkout-api-slo",
+  "title": "checkout-api / SLOs and error budget",
+  "tags": [
+    "checkout-api",
+    "slo",
+    "prometheus"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Data source",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "slo",
+        "label": "SLO",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(slo:objective:ratio{service=\"checkout-api\"}, slo)",
+          "refId": "slo"
+        },
+        "definition": "label_values(slo:objective:ratio{service=\"checkout-api\"}, slo)",
+        "current": {
+          "text": "availability",
+          "value": "availability"
+        },
+        "refresh": 1,
+        "hide": 0
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "SLO $slo",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "title": "Objective",
+      "type": "stat",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "slo:objective:ratio{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "objective"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 3,
+      "title": "SLI over 30d",
+      "type": "stat",
+      "description": "Good events / total events over the 30d SLO window.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "1 - slo:sli_error:ratio_rate30d{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "SLI"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Error budget remaining (30d)",
+      "type": "gauge",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 9,
+        "y": 1,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "slo:error_budget_remaining:ratio{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "remaining"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.25
+              },
+              {
+                "color": "green",
+                "value": 0.5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "min": 0,
+        "max": 1
+      }
+    },
+    {
+      "id": 5,
+      "title": "Burn rate 1h",
+      "type": "stat",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 14,
+        "y": 1,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "slo:sli_error:ratio_rate1h{service=\"checkout-api\",slo=\"$slo\"} / on(service, slo) slo:error_budget:ratio{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "1h"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:x",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 6
+              },
+              {
+                "color": "red",
+                "value": 14.4
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 6,
+      "title": "Burn rate 6h",
+      "type": "stat",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 19,
+        "y": 1,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "slo:sli_error:ratio_rate6h{service=\"checkout-api\",slo=\"$slo\"} / on(service, slo) slo:error_budget:ratio{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "6h"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:x",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 3
+              },
+              {
+                "color": "red",
+                "value": 6
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 7,
+      "title": "Burn rate by window",
+      "type": "timeseries",
+      "description": "1.0 = spending the budget exactly over the SLO window. Page thresholds: 14.4x (1h/5m), 6x (6h/30m).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 16,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "slo:sli_error:ratio_rate5m{service=\"checkout-api\",slo=\"$slo\"} / on(service, slo) slo:error_budget:ratio{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "5m"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "slo:sli_error:ratio_rate30m{service=\"checkout-api\",slo=\"$slo\"} / on(service, slo) slo:error_budget:ratio{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "30m"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "slo:sli_error:ratio_rate1h{service=\"checkout-api\",slo=\"$slo\"} / on(service, slo) slo:error_budget:ratio{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "1h"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "slo:sli_error:ratio_rate6h{service=\"checkout-api\",slo=\"$slo\"} / on(service, slo) slo:error_budget:ratio{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "6h"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "slo:sli_error:ratio_rate1d{service=\"checkout-api\",slo=\"$slo\"} / on(service, slo) slo:error_budget:ratio{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "1d"
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "slo:sli_error:ratio_rate3d{service=\"checkout-api\",slo=\"$slo\"} / on(service, slo) slo:error_budget:ratio{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "3d"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:x"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Burn-rate alerts",
+      "type": "table",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 5,
+        "w": 8,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "ALERTS{alertname=\"ErrorBudgetBurn\",service=\"checkout-api\",slo=\"$slo\"}",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 9,
+      "title": "Error ratio vs budget",
+      "type": "timeseries",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "slo:sli_error:ratio_rate1h{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "error ratio 1h"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "slo:sli_error:ratio_rate5m{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "error ratio 5m"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "slo:error_budget:ratio{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "error budget"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Error budget remaining over time",
+      "type": "timeseries",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "slo:error_budget_remaining:ratio{service=\"checkout-api\",slo=\"$slo\"}",
+          "legendFormat": "remaining"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    }
+  ],
+  "links": [
+    {
+      "title": "Runbooks",
+      "type": "link",
+      "url": "https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md",
+      "targetBlank": true
+    }
+  ]
+}

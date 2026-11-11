@@ -1,0 +1,134 @@
+# promtool unit tests for the generated SLO rules (multi-window, multi-burn-rate).
+# Run: promtool test rules tests/promtool/*.yml
+rule_files:
+  - ../../prometheus/rules/slo-checkout-api.yml
+
+evaluation_interval: 1m
+
+tests:
+  # 1. Hard outage: ~9.1% of /api requests fail (burn rate ~91x on a 99.9% SLO).
+  - interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="checkout-api",instance="checkout-api:8080",method="GET",route="/api/v1/products",code="200"}'
+        values: '0+600x360'
+      - series: 'http_requests_total{job="checkout-api",instance="checkout-api:8080",method="GET",route="/api/v1/products",code="503"}'
+        values: '0+60x360'
+      # Health checks are outside the SLI and must not dilute it.
+      - series: 'http_requests_total{job="checkout-api",instance="checkout-api:8080",method="GET",route="/healthz",code="200"}'
+        values: '0+100000x360'
+    promql_expr_test:
+      - expr: slo:sli_error:ratio_rate5m{slo="availability"}
+        eval_time: 10m
+        exp_samples:
+          - labels: 'slo:sli_error:ratio_rate5m{service="checkout-api",slo="availability"}'
+            value: 0.09090909090909091
+      - expr: slo:error_budget:ratio{slo="availability"}
+        eval_time: 10m
+        exp_samples:
+          - labels: 'slo:error_budget:ratio{service="checkout-api",slo="availability"}'
+            value: 0.001
+    alert_rule_test:
+      # Fast page (1h/5m, for 2m) fires within minutes; the 6h/30m page is still pending.
+      - eval_time: 10m
+        alertname: ErrorBudgetBurn
+        exp_alerts:
+          - exp_labels:
+              service: checkout-api
+              slo: availability
+              severity: page
+              long_window: 1h
+              short_window: 5m
+              burn_rate: "14.4"
+            exp_annotations:
+              summary: checkout-api availability SLO is burning error budget at more than 14.4x
+              description: Error ratio over 1h and 5m is above 1.44% (objective 99.9% over 30d). At this rate 2% of the budget is spent in 1h.
+              runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#errorbudgetburn
+      # After 5h every tier is firing.
+      - eval_time: 5h
+        alertname: ErrorBudgetBurn
+        exp_alerts:
+          - exp_labels: {service: checkout-api, slo: availability, severity: page, long_window: 1h, short_window: 5m, burn_rate: "14.4"}
+            exp_annotations:
+              summary: checkout-api availability SLO is burning error budget at more than 14.4x
+              description: Error ratio over 1h and 5m is above 1.44% (objective 99.9% over 30d). At this rate 2% of the budget is spent in 1h.
+              runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#errorbudgetburn
+          - exp_labels: {service: checkout-api, slo: availability, severity: page, long_window: 6h, short_window: 30m, burn_rate: "6"}
+            exp_annotations:
+              summary: checkout-api availability SLO is burning error budget at more than 6x
+              description: Error ratio over 6h and 30m is above 0.6% (objective 99.9% over 30d). At this rate 5% of the budget is spent in 6h.
+              runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#errorbudgetburn
+          - exp_labels: {service: checkout-api, slo: availability, severity: ticket, long_window: 1d, short_window: 2h, burn_rate: "3"}
+            exp_annotations:
+              summary: checkout-api availability SLO is burning error budget at more than 3x
+              description: Error ratio over 1d and 2h is above 0.3% (objective 99.9% over 30d). At this rate 10% of the budget is spent in 1d.
+              runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#errorbudgetburn
+          - exp_labels: {service: checkout-api, slo: availability, severity: ticket, long_window: 3d, short_window: 6h, burn_rate: "1"}
+            exp_annotations:
+              summary: checkout-api availability SLO is burning error budget at more than 1x
+              description: Error ratio over 3d and 6h is above 0.1% (objective 99.9% over 30d). At this rate 10% of the budget is spent in 3d.
+              runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#errorbudgetburn
+
+  # 2. Slow leak: ~0.5% errors (burn ~5x) opens tickets but never pages.
+  - interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="checkout-api",instance="checkout-api:8080",method="POST",route="/api/v1/orders",code="201"}'
+        values: '0+600x360'
+      - series: 'http_requests_total{job="checkout-api",instance="checkout-api:8080",method="POST",route="/api/v1/orders",code="500"}'
+        values: '0+3x360'
+    alert_rule_test:
+      - eval_time: 5h
+        alertname: ErrorBudgetBurn
+        exp_alerts:
+          - exp_labels: {service: checkout-api, slo: availability, severity: ticket, long_window: 1d, short_window: 2h, burn_rate: "3"}
+            exp_annotations:
+              summary: checkout-api availability SLO is burning error budget at more than 3x
+              description: Error ratio over 1d and 2h is above 0.3% (objective 99.9% over 30d). At this rate 10% of the budget is spent in 1d.
+              runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#errorbudgetburn
+          - exp_labels: {service: checkout-api, slo: availability, severity: ticket, long_window: 3d, short_window: 6h, burn_rate: "1"}
+            exp_annotations:
+              summary: checkout-api availability SLO is burning error budget at more than 1x
+              description: Error ratio over 3d and 6h is above 0.1% (objective 99.9% over 30d). At this rate 10% of the budget is spent in 3d.
+              runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#errorbudgetburn
+
+  # 3. Healthy service: 0.05% errors stays inside the budget, nothing fires.
+  - interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="checkout-api",instance="checkout-api:8080",method="GET",route="/api/v1/products",code="200"}'
+        values: '0+2000x360'
+      - series: 'http_requests_total{job="checkout-api",instance="checkout-api:8080",method="GET",route="/api/v1/products",code="503"}'
+        values: '0+1x360'
+    promql_expr_test:
+      # 1/2001 error ratio against a 0.1% budget leaves ~50% of the budget.
+      - expr: (slo:error_budget_remaining:ratio{slo="availability"} > bool 0.4997) * (slo:error_budget_remaining:ratio{slo="availability"} < bool 0.5007)
+        eval_time: 5h
+        exp_samples:
+          - labels: '{service="checkout-api",slo="availability"}'
+            value: 1
+    alert_rule_test:
+      - eval_time: 5h
+        alertname: ErrorBudgetBurn
+        exp_alerts: []
+
+  # 4. Latency: one in six /api requests is slower than 300 ms (99% SLO).
+  - interval: 1m
+    input_series:
+      - series: 'http_request_duration_seconds_count{job="checkout-api",instance="checkout-api:8080",method="GET",route="/api/v1/products"}'
+        values: '0+600x30'
+      - series: 'http_request_duration_seconds_bucket{job="checkout-api",instance="checkout-api:8080",method="GET",route="/api/v1/products",le="0.3"}'
+        values: '0+500x30'
+    promql_expr_test:
+      # 100 of 600 requests per minute miss 300 ms -> error ratio 1/6 (tolerance 1e-6).
+      - expr: abs(slo:sli_error:ratio_rate5m{slo="latency"} - 1/6) < bool 1e-6
+        eval_time: 10m
+        exp_samples:
+          - labels: '{service="checkout-api",slo="latency"}'
+            value: 1
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ErrorBudgetBurn
+        exp_alerts:
+          - exp_labels: {service: checkout-api, slo: latency, severity: page, long_window: 1h, short_window: 5m, burn_rate: "14.4"}
+            exp_annotations:
+              summary: checkout-api latency SLO is burning error budget at more than 14.4x
+              description: Error ratio over 1h and 5m is above 14.4% (objective 99% over 30d). At this rate 2% of the budget is spent in 1h.
+              runbook_url: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md#errorbudgetburn

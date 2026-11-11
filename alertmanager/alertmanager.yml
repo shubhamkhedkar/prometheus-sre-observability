@@ -1,0 +1,44 @@
+# Example Alertmanager routing. Receivers point at placeholder webhook URLs;
+# replace them with your paging / ticketing integrations (keep real URLs and
+# tokens in a secret store, not in Git).
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default-null
+  group_by: [alertname, service, slo, severity]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="page"]
+      receiver: oncall-pager
+      repeat_interval: 1h
+    - matchers: [severity="ticket"]
+      receiver: ticket-queue
+    - matchers: [severity="info"]
+      receiver: merchandising
+
+inhibit_rules:
+  # A fast-burn page already covers the slower ticket for the same SLO.
+  - source_matchers: [alertname="ErrorBudgetBurn", severity="page"]
+    target_matchers: [alertname="ErrorBudgetBurn", severity="ticket"]
+    equal: [service, slo]
+  # If the target is down, symptom alerts for the same job add no information.
+  - source_matchers: [alertname="CheckoutAPITargetDown"]
+    target_matchers: [severity="ticket"]
+    equal: [job]
+
+receivers:
+  - name: default-null
+  - name: oncall-pager
+    webhook_configs:
+      - url: http://alert-sink.example.invalid/pager
+        send_resolved: true
+  - name: ticket-queue
+    webhook_configs:
+      - url: http://alert-sink.example.invalid/tickets
+        send_resolved: true
+  - name: merchandising
+    webhook_configs:
+      - url: http://alert-sink.example.invalid/merchandising

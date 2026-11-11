@@ -1,0 +1,34 @@
+# Service-level recording rules for checkout-api (naming: level:metric:operations).
+groups:
+  - name: checkout-api.recording
+    interval: 30s
+    rules:
+      - record: job_route_code:http_requests:rate5m
+        expr: sum by (job, route, code) (rate(http_requests_total[5m]))
+
+      - record: job_route:http_requests:rate5m
+        expr: sum by (job, route) (rate(http_requests_total[5m]))
+
+      - record: job:http_requests:rate5m
+        expr: sum by (job) (rate(http_requests_total[5m]))
+
+      - record: job:http_requests_errors:ratio_rate5m
+        expr: |
+          sum by (job) (rate(http_requests_total{code=~"5.."}[5m]))
+          /
+          sum by (job) (rate(http_requests_total[5m]))
+
+      - record: job_route:http_request_duration_seconds:p50_5m
+        expr: histogram_quantile(0.50, sum by (job, route, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+      - record: job_route:http_request_duration_seconds:p95_5m
+        expr: histogram_quantile(0.95, sum by (job, route, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+      - record: job_route:http_request_duration_seconds:p99_5m
+        expr: histogram_quantile(0.99, sum by (job, route, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+      - record: job:http_requests_in_flight:sum
+        expr: sum by (job) (http_requests_in_flight)
+
+      - record: job_outcome:checkout_orders:rate5m
+        expr: sum by (job, outcome) (rate(checkout_orders_total[5m]))

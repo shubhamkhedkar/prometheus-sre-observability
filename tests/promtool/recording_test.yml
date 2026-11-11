@@ -1,0 +1,64 @@
+# promtool unit tests for prometheus/rules/recording.yml
+rule_files:
+  - ../../prometheus/rules/recording.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="checkout-api",instance="a:8080",method="GET",route="/api/v1/products",code="200"}'
+        values: '0+540x20'
+      - series: 'http_requests_total{job="checkout-api",instance="b:8080",method="GET",route="/api/v1/products",code="503"}'
+        values: '0+60x20'
+      - series: 'http_requests_in_flight{job="checkout-api",instance="a:8080"}'
+        values: '3x20'
+      - series: 'http_requests_in_flight{job="checkout-api",instance="b:8080"}'
+        values: '4x20'
+      - series: 'checkout_orders_total{job="checkout-api",instance="a:8080",outcome="created"}'
+        values: '0+120x20'
+      # All requests land in the (0.1, 0.2] bucket.
+      - series: 'http_request_duration_seconds_bucket{job="checkout-api",instance="a:8080",method="GET",route="/api/v1/products",le="0.1"}'
+        values: '0x20'
+      - series: 'http_request_duration_seconds_bucket{job="checkout-api",instance="a:8080",method="GET",route="/api/v1/products",le="0.2"}'
+        values: '0+600x20'
+      - series: 'http_request_duration_seconds_bucket{job="checkout-api",instance="a:8080",method="GET",route="/api/v1/products",le="+Inf"}'
+        values: '0+600x20'
+    promql_expr_test:
+      # 600 requests per minute across instances = 10 rps.
+      - expr: job:http_requests:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'job:http_requests:rate5m{job="checkout-api"}'
+            value: 10
+      - expr: job_route_code:http_requests:rate5m{code="503"}
+        eval_time: 10m
+        exp_samples:
+          - labels: 'job_route_code:http_requests:rate5m{job="checkout-api",route="/api/v1/products",code="503"}'
+            value: 1
+      - expr: job:http_requests_errors:ratio_rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'job:http_requests_errors:ratio_rate5m{job="checkout-api"}'
+            value: 0.1
+      - expr: job:http_requests_in_flight:sum
+        eval_time: 10m
+        exp_samples:
+          - labels: 'job:http_requests_in_flight:sum{job="checkout-api"}'
+            value: 7
+      - expr: job_outcome:checkout_orders:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'job_outcome:checkout_orders:rate5m{job="checkout-api",outcome="created"}'
+            value: 2
+      # Linear interpolation inside (0.1, 0.2]: p50 = 0.15, p99 = 0.199.
+      - expr: abs(job_route:http_request_duration_seconds:p50_5m - 0.15) < bool 1e-9
+        eval_time: 10m
+        exp_samples:
+          - labels: '{job="checkout-api",route="/api/v1/products"}'
+            value: 1
+      - expr: abs(job_route:http_request_duration_seconds:p99_5m - 0.199) < bool 1e-9
+        eval_time: 10m
+        exp_samples:
+          - labels: '{job="checkout-api",route="/api/v1/products"}'
+            value: 1

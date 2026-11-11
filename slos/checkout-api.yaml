@@ -1,0 +1,26 @@
+# SLO specification for checkout-api. `make slo-rules` renders
+# prometheus/rules/slo-checkout-api.yml from this file.
+service: checkout-api
+window: 30d
+runbook_base: https://github.com/shubhamkhedkar/prometheus-sre-observability/blob/main/docs/runbooks.md
+slos:
+  - name: availability
+    objective: 99.9
+    description: Share of /api requests that do not fail with a 5xx response.
+    sli:
+      errors: sum(rate(http_requests_total{job="checkout-api",route=~"/api/.*",code=~"5.."}[$window]))
+      total: sum(rate(http_requests_total{job="checkout-api",route=~"/api/.*"}[$window]))
+  - name: latency
+    objective: 99
+    description: Share of /api requests served in 300 ms or less.
+    sli:
+      latency:
+        metric: http_request_duration_seconds
+        selector: job="checkout-api",route=~"/api/.*"
+        threshold: 0.3
+# Multi-window, multi-burn-rate tiers (SRE Workbook defaults for a 30d window).
+alerting:
+  - {severity: page, long_window: 1h, short_window: 5m, budget_consumed: 0.02, for: 2m}
+  - {severity: page, long_window: 6h, short_window: 30m, budget_consumed: 0.05, for: 15m}
+  - {severity: ticket, long_window: 1d, short_window: 2h, budget_consumed: 0.10, for: 1h}
+  - {severity: ticket, long_window: 3d, short_window: 6h, budget_consumed: 0.10, for: 1h}
